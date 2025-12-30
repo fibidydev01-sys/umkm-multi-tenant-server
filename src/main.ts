@@ -1,14 +1,20 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const logger = new Logger('Bootstrap');
 
-  // Enable CORS
+  const app = await NestFactory.create(AppModule, {
+    logger: ['error', 'warn', 'log'],
+  });
+
+  // Enable CORS - allow all origins for development
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: process.env.FRONTEND_URL || '*',
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   });
 
   // Global validation pipe
@@ -17,16 +23,52 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
     }),
   );
 
   // Global prefix
   app.setGlobalPrefix('api');
 
-  const port = process.env.PORT || 3000;
-  await app.listen(port);
+  // Enable graceful shutdown hooks
+  app.enableShutdownHooks();
 
-  console.log(`🚀 Server running on http://localhost:${port}`);
-  console.log(`📚 API endpoint: http://localhost:${port}/api`);
+  const port = process.env.PORT || 8000;
+
+  await app.listen(port, '0.0.0.0');
+
+  logger.log(`🚀 Server running on http://localhost:${port}`);
+  logger.log(`📚 API endpoint: http://localhost:${port}/api`);
 }
-bootstrap();
+
+// Handle uncaught exceptions - prevent crash
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error.message);
+  console.error(error.stack);
+  // Don't exit - let the app continue
+});
+
+// Handle unhandled promise rejections - prevent crash
+process.on('unhandledRejection', (reason: any) => {
+  console.error('❌ Unhandled Rejection:', reason?.message || reason);
+  // Don't exit - let the app continue
+});
+
+// Handle SIGTERM for graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('📴 SIGTERM received, shutting down gracefully...');
+  process.exit(0);
+});
+
+// Handle SIGINT (Ctrl+C)
+process.on('SIGINT', () => {
+  console.log('📴 SIGINT received, shutting down gracefully...');
+  process.exit(0);
+});
+
+bootstrap().catch((error) => {
+  console.error('❌ Failed to start application:', error);
+  process.exit(1);
+});
