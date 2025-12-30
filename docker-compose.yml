@@ -1,0 +1,63 @@
+# ============================================================================
+# docker-compose.yml - UMKM Multi-Tenant
+# API Only - Database via Supabase
+# ============================================================================
+
+version: '3.8'
+
+services:
+  # ============================================================================
+  # NestJS API - Menggunakan Supabase sebagai Database
+  # ============================================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+      args:
+        - NODE_ENV=development
+    container_name: umkm-api
+    restart: unless-stopped
+    ports:
+      - '8000:8000'
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+      - PORT=8000
+      # Supabase Connection Pooling
+      - DATABASE_URL=${DATABASE_URL}
+      - DIRECT_URL=${DIRECT_URL}
+      # JWT
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
+      # CORS
+      - FRONTEND_URL=${FRONTEND_URL}
+    networks:
+      - umkm-network
+    volumes:
+      # Hot reload - mount source code (read-only untuk performa)
+      - ./src:/app/src:ro
+      - ./prisma:/app/prisma:ro
+
+      # Persistent data (read-write)
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+
+      # Exclude node_modules (performance optimization)
+      - /app/node_modules
+      - /app/.pnpm-store
+    healthcheck:
+      test: [ 'CMD', 'curl', '-f', 'http://localhost:8000/health' ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  umkm-network:
+    driver: bridge
+    name: umkm-network

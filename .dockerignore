@@ -1,0 +1,77 @@
+# ============================================================================
+# .dockerignore - UMKM Multi-Tenant
+# Exclude files from Docker build context
+# ============================================================================
+
+# Dependencies
+node_modules
+.pnpm-store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing
+coverage
+.nyc_output
+*.test.ts
+*.spec.ts
+test/
+tests/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Documentation
+README.md
+CHANGELOG.md
+LICENSE
+docs/
+
+# Development files
+.env.local
+.env.development
+.env.test
+*.log
+
+# Build output (akan di-build ulang di container)
+dist
+build
+
+# Uploads & Logs (akan di-mount dari volume)
+uploads/*
+logs/*
+
+# Docker files
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Justfile
+justfile
+Justfile
+
+# Scripts
+test-auth.sh
+*.sh
+
+# Misc
+.editorconfig
+.prettierrc
+.eslintrc.js
+tsconfig.build.json
