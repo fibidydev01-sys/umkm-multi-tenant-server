@@ -1,0 +1,266 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
+
+enum TenantStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  PARTIAL
+  FAILED
+}
+
+// ==========================================
+// TENANT (UMKM)
+// ==========================================
+
+model Tenant {
+  id          String       @id @default(cuid())
+  slug        String       @unique // tokosari, bengkeljaya
+  
+  // Business Info
+  name        String       // "Warung Kelontong Pak Sari"
+  category    String       // "WARUNG_KELONTONG"
+  description String?
+  
+  // Contact
+  whatsapp    String       // "6281234567890"
+  email       String       @unique
+  phone       String?
+  address     String?
+  
+  // Branding
+  logo        String?      // Cloudinary URL
+  banner      String?      // Cloudinary URL
+  theme       Json?        // {"primaryColor": "#10b981"}
+  
+  // Auth
+  password    String       // bcrypt hashed
+  
+  // Status
+  status      TenantStatus @default(ACTIVE)
+  
+  // Timestamps
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  
+  // Relations
+  products    Product[]
+  customers   Customer[]
+  orders      Order[]
+  
+  @@index([slug])
+  @@index([category])
+  @@index([status])
+}
+
+// ==========================================
+// PRODUCT / SERVICE
+// ==========================================
+
+model Product {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Basic Info
+  name         String
+  description  String?
+  category     String?  // Category within store (e.g., "Mie Instan", "Minuman")
+  sku          String?
+  
+  // Pricing
+  price        Float
+  comparePrice Float?   // Original price (for discount display)
+  costPrice    Float?   // Cost for profit calculation
+  
+  // Stock (optional - for inventory-based businesses)
+  stock        Int?
+  minStock     Int?
+  trackStock   Boolean  @default(false)
+  unit         String?  // "pcs", "kg", "porsi", "jam"
+  
+  // Media
+  images       String[] // Array of Cloudinary URLs
+  
+  // Category-specific data (FLEXIBLE JSON)
+  metadata     Json?
+  // Examples:
+  // WARUNG: {"barcode": "8991001234567", "supplier": "PT ABC"}
+  // BENGKEL: {"duration": 30, "warranty": 7}
+  // SALON: {"duration": 60, "stylist": "Mas Joko"}
+  // LAUNDRY: {"pricePerKg": 8000, "estimatedDays": 2}
+  // CATERING: {"minOrder": 10, "leadTime": 1}
+  
+  // Status
+  isActive     Boolean  @default(true)
+  isFeatured   Boolean  @default(false)
+  
+  // SEO
+  slug         String?
+  
+  // Timestamps
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Relations
+  orderItems   OrderItem[]
+  
+  @@unique([tenantId, sku])
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@index([tenantId, category])
+  @@index([tenantId, isFeatured])
+}
+
+// ==========================================
+// CUSTOMER
+// ==========================================
+
+model Customer {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Basic Info
+  name        String
+  phone       String
+  email       String?
+  address     String?
+  
+  // Category-specific data (FLEXIBLE JSON)
+  metadata    Json?
+  // Examples:
+  // WARUNG: {"totalDebt": 75000, "creditLimit": 200000}
+  // BENGKEL: {"vehicles": [{"plate": "B 1234 XY", "brand": "Honda", "model": "Beat"}]}
+  // SALON: {"preferences": "Potong pendek, tidak suka poni"}
+  // GYM: {"membershipId": "GYM-001", "expiryDate": "2025-01-15"}
+  // KOST: {"roomNumber": "A01", "depositPaid": 1500000}
+  
+  // Stats (auto-calculated)
+  totalOrders Int      @default(0)
+  totalSpent  Float    @default(0)
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  orders      Order[]
+  
+  @@unique([tenantId, phone])
+  @@index([tenantId])
+  @@index([tenantId, phone])
+  @@index([tenantId, name])
+}
+
+// ==========================================
+// ORDER / TRANSACTION
+// ==========================================
+
+model Order {
+  id            String        @id @default(cuid())
+  tenantId      String
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  customerId    String?
+  customer      Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  
+  // Order Info
+  orderNumber   String        // "ORD-20241212-001"
+  
+  // Items
+  items         OrderItem[]
+  
+  // Pricing
+  subtotal      Float
+  discount      Float         @default(0)
+  tax           Float         @default(0)
+  total         Float
+  
+  // Payment
+  paymentMethod String?       // "cash", "transfer", "qris", "debt"
+  paymentStatus PaymentStatus @default(PENDING)
+  paidAmount    Float         @default(0)
+  
+  // Status
+  status        OrderStatus   @default(PENDING)
+  
+  // Guest Order (tanpa customer)
+  customerName  String?
+  customerPhone String?
+  
+  // Notes
+  notes         String?
+  
+  // Category-specific data (FLEXIBLE JSON)
+  metadata      Json?
+  // Examples:
+  // LAUNDRY: {"weight": 3.5, "pickupDate": "2024-12-15", "status": "washing"}
+  // RENTAL: {"startDate": "2024-12-13", "endDate": "2024-12-15", "deposit": 200000}
+  // CATERING: {"deliveryDate": "2024-12-20", "deliveryTime": "11:00", "deliveryAddress": "..."}
+  // BENGKEL: {"vehiclePlate": "B 1234 XY", "complaint": "Ganti oli", "technicianNotes": "..."}
+  
+  // Timestamps
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  completedAt   DateTime?
+  
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, paymentStatus])
+  @@index([tenantId, createdAt])
+  @@index([customerId])
+}
+
+// ==========================================
+// ORDER ITEM
+// ==========================================
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  
+  // Store info (in case product deleted/changed)
+  name      String
+  price     Float
+  qty       Int
+  subtotal  Float
+  
+  // Additional
+  notes     String?
+  metadata  Json?    // For additional item-specific data
+  
+  @@index([orderId])
+  @@index([productId])
+}
